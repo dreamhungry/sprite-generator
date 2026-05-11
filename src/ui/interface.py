@@ -8,29 +8,17 @@ from PIL import Image
 from ..config import (
     ANIMATION_MODES,
     ASSET_TYPES,
+    BASE_URL,
     DEFAULT_CELL_SIZE,
-    DEFAULT_PROVIDER,
     GRID_PRESETS,
+    MODEL,
 )
 from ..controller import run_pipeline
 from ..prompt_builder import get_style_options
-from ..providers import PROVIDERS
-
-
-def _get_available_providers() -> list[str]:
-    """Return list of providers that have API keys configured."""
-    available = []
-    for name, cls in PROVIDERS.items():
-        instance = cls()
-        if instance.is_available():
-            available.append(name)
-    # Always show all providers (user can configure later)
-    return list(PROVIDERS.keys())
 
 
 def _generate(
     subject: str,
-    provider_name: str,
     asset_type: str,
     mode: str,
     grid: str,
@@ -51,10 +39,9 @@ def _generate(
     progress(0.1, desc="Building prompt...")
 
     try:
-        progress(0.2, desc=f"Generating with {provider_name}...")
+        progress(0.2, desc=f"Generating with {MODEL}...")
         result = run_pipeline(
             subject=subject,
-            provider_name=provider_name,
             asset_type=asset_type,
             mode=mode,
             grid=grid,
@@ -71,20 +58,20 @@ def _generate(
 
         # Build info text
         info = (
-            f"Provider: {result.provider_name} ({result.model_name})\n"
+            f"Model: {result.model_name}\n"
+            f"Endpoint: {BASE_URL}\n"
             f"Generation: {result.generation_time:.1f}s | Processing: {result.processing_time:.1f}s\n"
             f"Output: {result.output_dir}"
         )
 
-        # Return results
-        gif_output = str(result.gif_path) if result.gif_path else None
+        gif_path = str(result.gif_path) if result.gif_path else None
 
         return (
             result.raw_image,
             result.processed_image,
             result.sheet,
             result.frames if result.frames else [],
-            gif_output,
+            gif_path,
             result.prompt_used,
             info,
         )
@@ -99,6 +86,7 @@ def create_ui() -> gr.Blocks:
 
     with gr.Blocks(title="Sprite Generator") as app:
         gr.Markdown("# 🎮 Sprite Generator\nGenerate 2D game sprites from text prompts or reference images.")
+        gr.Markdown(f"**Model:** `{MODEL}` &nbsp; **Endpoint:** `{BASE_URL}`")
 
         with gr.Row():
             # Left panel: Input
@@ -124,18 +112,6 @@ def create_ui() -> gr.Blocks:
                 )
 
                 with gr.Row():
-                    provider = gr.Dropdown(
-                        choices=_get_available_providers(),
-                        value=DEFAULT_PROVIDER,
-                        label="Provider",
-                    )
-                    image_size = gr.Dropdown(
-                        choices=["1024x1024", "1024x1536", "1536x1024"],
-                        value="1024x1024",
-                        label="Image Size",
-                    )
-
-                with gr.Row():
                     asset_type = gr.Dropdown(
                         choices=ASSET_TYPES,
                         value="creature",
@@ -157,6 +133,13 @@ def create_ui() -> gr.Blocks:
                         choices=get_style_options(),
                         value="pixel_art",
                         label="Style",
+                    )
+
+                with gr.Row():
+                    image_size = gr.Dropdown(
+                        choices=["1024x1024", "1024x1536", "1536x1024"],
+                        value="1024x1024",
+                        label="Image Size",
                     )
 
                 with gr.Accordion("Advanced Settings", open=False):
@@ -202,11 +185,15 @@ def create_ui() -> gr.Blocks:
                     prompt_output = gr.Textbox(label="Prompt Used", lines=4, interactive=False)
                     info_output = gr.Textbox(label="Generation Info", lines=3, interactive=False)
 
-        # Wire up the generate button
+        # Wire up the generate button with loading state protection
         generate_btn.click(
+            fn=lambda: gr.update(value="⏳ Generating...", interactive=False),
+            inputs=None,
+            outputs=generate_btn,
+        ).then(
             fn=_generate,
             inputs=[
-                subject, provider, asset_type, mode, grid, style,
+                subject, asset_type, mode, grid, style,
                 cell_size, align, shared_scale, component_mode,
                 reference_image, extra_instructions, image_size,
             ],
@@ -214,6 +201,10 @@ def create_ui() -> gr.Blocks:
                 raw_output, processed_output, sheet_output,
                 frames_output, gif_output, prompt_output, info_output,
             ],
+        ).then(
+            fn=lambda: gr.update(value="🚀 Generate", interactive=True),
+            inputs=None,
+            outputs=generate_btn,
         )
 
     return app

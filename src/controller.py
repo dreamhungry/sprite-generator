@@ -9,8 +9,7 @@ from PIL import Image
 from .config import DEFAULT_CELL_SIZE, GRID_PRESETS, OUTPUT_DIR
 from .processing import remove_background, split_grid, align_frames, compose_sheet, save_gif, save_frames
 from .prompt_builder import build_prompt
-from .providers import get_provider
-from .providers.base import GenerationRequest, GenerationResult
+from .providers import generate_image, GenerationRequest
 
 
 @dataclass
@@ -25,7 +24,6 @@ class PipelineResult:
     frame_paths: list[Path] = field(default_factory=list)
     output_dir: Path | None = None
     prompt_used: str = ""
-    provider_name: str = ""
     model_name: str = ""
     generation_time: float = 0.0
     processing_time: float = 0.0
@@ -33,7 +31,6 @@ class PipelineResult:
 
 def run_pipeline(
     subject: str,
-    provider_name: str = "openai",
     asset_type: str = "creature",
     mode: str = "idle",
     grid: str = "1x4",
@@ -50,29 +47,11 @@ def run_pipeline(
     Run the full sprite generation pipeline.
 
     1. Build optimized prompt
-    2. Call image generation provider
+    2. Call image generation API
     3. Remove background
     4. Split grid into frames
     5. Align and scale frames
     6. Compose sheet and export GIF
-
-    Args:
-        subject: Description of what to generate.
-        provider_name: Which provider to use ('openai', 'gemini').
-        asset_type: Type of game asset.
-        mode: Animation mode.
-        grid: Grid layout (e.g. "1x4", "2x2").
-        style: Visual style preset.
-        cell_size: Output cell size in pixels.
-        align: Frame alignment ('center', 'bottom', 'feet').
-        shared_scale: Whether to use uniform scaling across frames.
-        component_mode: 'all' or 'largest' for component isolation.
-        reference_image: Optional reference image for guided generation.
-        extra_instructions: Additional prompt instructions.
-        image_size: Generation image size.
-
-    Returns:
-        PipelineResult with all generated assets.
     """
     # 1. Build prompt
     prompt = build_prompt(
@@ -85,7 +64,6 @@ def run_pipeline(
     )
 
     # 2. Generate image
-    provider = get_provider(provider_name)
     request = GenerationRequest(
         prompt=prompt,
         reference_image=reference_image,
@@ -94,7 +72,7 @@ def run_pipeline(
     )
 
     t0 = time.time()
-    gen_result: GenerationResult = provider.generate(request)
+    gen_result = generate_image(request)
     generation_time = time.time() - t0
 
     raw_image = gen_result.image
@@ -183,7 +161,6 @@ def run_pipeline(
         frame_paths=frame_paths,
         output_dir=out_dir,
         prompt_used=prompt,
-        provider_name=gen_result.provider,
         model_name=gen_result.model,
         generation_time=generation_time,
         processing_time=processing_time,

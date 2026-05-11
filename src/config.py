@@ -9,12 +9,10 @@ from dotenv import load_dotenv
 _project_root = Path(__file__).parent.parent
 load_dotenv(_project_root / ".env")
 
-# API Keys
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-
-# Default provider
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "openai")
+# API settings (OpenAI-compatible format, works with any provider)
+API_KEY = os.getenv("API_KEY", "")
+BASE_URL = os.getenv("BASE_URL", "https://api.openai.com/v1").strip()
+MODEL = os.getenv("MODEL", "gpt-image-1")
 
 # Output directory
 OUTPUT_DIR = _project_root / "output"
